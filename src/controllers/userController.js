@@ -1,21 +1,22 @@
-import User from '../models/User.js';
-import Cart from '../models/Cart.js';
+import UserRepository from '../repositories/UserRepository.js';
+import UserDTO from '../dto/UserDTO.js';
+
+const userRepository = new UserRepository();
 
 /**
- * Get all users (admin only)
+ * Obtener todos los usuarios (solo admin)
  * GET /api/users
  */
 export const getAllUsers = async (req, res, next) => {
     try {
-        const users = await User.find()
-            .select('-password')
-            .populate('cart');
+        const users = await userRepository.getAll();
+        const usersDTO = users.map(user => new UserDTO(user));
 
         res.status(200).json({
             status: 'success',
-            results: users.length,
+            results: usersDTO.length,
             data: {
-                users
+                users: usersDTO
             }
         });
     } catch (error) {
@@ -24,26 +25,18 @@ export const getAllUsers = async (req, res, next) => {
 };
 
 /**
- * Get user by ID
+ * Obtener usuario por ID
  * GET /api/users/:id
  */
 export const getUserById = async (req, res, next) => {
     try {
-        const user = await User.findById(req.params.id)
-            .select('-password')
-            .populate('cart');
-
-        if (!user) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'User not found'
-            });
-        }
+        const user = await userRepository.getById(req.params.id);
+        const userDTO = new UserDTO(user);
 
         res.status(200).json({
             status: 'success',
             data: {
-                user
+                user: userDTO
             }
         });
     } catch (error) {
@@ -52,38 +45,27 @@ export const getUserById = async (req, res, next) => {
 };
 
 /**
- * Update user
+ * Actualizar usuario
  * PUT /api/users/:id
  */
 export const updateUser = async (req, res, next) => {
     try {
         const { first_name, last_name, email, age } = req.body;
 
-        // Don't allow password or role updates through this endpoint
         const updateData = {};
         if (first_name) updateData.first_name = first_name;
         if (last_name) updateData.last_name = last_name;
         if (email) updateData.email = email;
         if (age) updateData.age = age;
 
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true, runValidators: true }
-        ).select('-password').populate('cart');
-
-        if (!user) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'User not found'
-            });
-        }
+        const user = await userRepository.update(req.params.id, updateData);
+        const userDTO = new UserDTO(user);
 
         res.status(200).json({
             status: 'success',
-            message: 'User updated successfully',
+            message: 'Usuario actualizado exitosamente',
             data: {
-                user
+                user: userDTO
             }
         });
     } catch (error) {
@@ -92,31 +74,16 @@ export const updateUser = async (req, res, next) => {
 };
 
 /**
- * Delete user (admin only)
+ * Eliminar usuario (solo admin)
  * DELETE /api/users/:id
  */
 export const deleteUser = async (req, res, next) => {
     try {
-        const user = await User.findById(req.params.id);
-
-        if (!user) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'User not found'
-            });
-        }
-
-        // Delete user's cart
-        if (user.cart) {
-            await Cart.findByIdAndDelete(user.cart);
-        }
-
-        // Delete user
-        await User.findByIdAndDelete(req.params.id);
+        await userRepository.delete(req.params.id);
 
         res.status(200).json({
             status: 'success',
-            message: 'User deleted successfully'
+            message: 'Usuario eliminado exitosamente'
         });
     } catch (error) {
         next(error);

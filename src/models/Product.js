@@ -1,30 +1,37 @@
 import mongoose from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 const productSchema = new mongoose.Schema({
     title: {
         type: String,
-        required: [true, 'Product title is required'],
+        required: [true, 'El título del producto es obligatorio'],
         trim: true
     },
     description: {
         type: String,
-        required: [true, 'Product description is required'],
+        required: [true, 'La descripción del producto es obligatoria'],
+        trim: true
+    },
+    code: {
+        type: String,
+        required: [true, 'El código del producto es obligatorio'],
+        unique: true,
         trim: true
     },
     price: {
         type: Number,
-        required: [true, 'Product price is required'],
-        min: [0, 'Price must be a positive number']
+        required: [true, 'El precio del producto es obligatorio'],
+        min: [0, 'El precio debe ser un número positivo']
     },
     stock: {
         type: Number,
-        required: [true, 'Product stock is required'],
-        min: [0, 'Stock must be a positive number'],
+        required: [true, 'El stock del producto es obligatorio'],
+        min: [0, 'El stock debe ser un número positivo'],
         default: 0
     },
     category: {
         type: String,
-        required: [true, 'Product category is required'],
+        required: [true, 'La categoría del producto es obligatoria'],
         trim: true
     },
     thumbnails: [{
@@ -37,6 +44,8 @@ const productSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+productSchema.plugin(mongoosePaginate);
 
 const Product = mongoose.model('Product', productSchema);
 

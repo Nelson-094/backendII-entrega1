@@ -1,15 +1,15 @@
 import passport from 'passport';
 
 /**
- * Middleware to authenticate user using JWT
- * Uses Passport JWT strategy
+ * Middleware para autenticar usuario con JWT
+ * Usa la estrategia JWT de Passport
  */
 export const authenticate = (req, res, next) => {
     passport.authenticate('jwt', { session: false }, (error, user, info) => {
         if (error) {
             return res.status(500).json({
                 status: 'error',
-                message: 'Authentication error',
+                message: 'Error de autenticación',
                 error: error.message
             });
         }
@@ -17,7 +17,7 @@ export const authenticate = (req, res, next) => {
         if (!user) {
             return res.status(401).json({
                 status: 'error',
-                message: info?.message || 'Unauthorized: Invalid or missing token'
+                message: info?.message || 'No autorizado: Token inválido o faltante'
             });
         }
 
@@ -27,20 +27,21 @@ export const authenticate = (req, res, next) => {
 };
 
 /**
- * Middleware to check if user has admin role
+ * Middleware para verificar que el usuario es admin
+ * Solo el administrador puede crear, actualizar y eliminar productos
  */
 export const isAdmin = (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({
             status: 'error',
-            message: 'Unauthorized: Authentication required'
+            message: 'No autorizado: Autenticación requerida'
         });
     }
 
     if (req.user.role !== 'admin') {
         return res.status(403).json({
             status: 'error',
-            message: 'Forbidden: Admin access required'
+            message: 'Prohibido: Se requiere rol de administrador'
         });
     }
 
@@ -48,14 +49,35 @@ export const isAdmin = (req, res, next) => {
 };
 
 /**
- * Middleware to check if user can access resource
- * User can access their own resources or admin can access all
+ * Middleware para verificar que el usuario es un usuario regular (no admin)
+ * Solo el usuario puede agregar productos a su carrito
+ */
+export const isUser = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            status: 'error',
+            message: 'No autorizado: Autenticación requerida'
+        });
+    }
+
+    if (req.user.role !== 'user') {
+        return res.status(403).json({
+            status: 'error',
+            message: 'Prohibido: Solo los usuarios pueden realizar esta acción'
+        });
+    }
+
+    next();
+};
+
+/**
+ * Middleware para verificar si el usuario es dueño del recurso o admin
  */
 export const isOwnerOrAdmin = (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({
             status: 'error',
-            message: 'Unauthorized: Authentication required'
+            message: 'No autorizado: Autenticación requerida'
         });
     }
 
@@ -67,6 +89,6 @@ export const isOwnerOrAdmin = (req, res, next) => {
 
     return res.status(403).json({
         status: 'error',
-        message: 'Forbidden: You can only access your own resources'
+        message: 'Prohibido: Solo puedes acceder a tus propios recursos'
     });
 };

@@ -1,309 +1,192 @@
-# Ecommerce Authentication System
+# E-commerce Backend - Desarrollo Avanzado Backend
 
-Sistema de autenticación y autorización para ecommerce con CRUD de usuarios, implementado con Node.js, Express, MongoDB, JWT y Passport.
+## 📋 Descripción
 
-## 🚀 Características
+API REST de e-commerce con arquitectura profesional implementando patrones de diseño DAO, Repository y DTO, autenticación JWT con Passport, autorización por roles, lógica de compra con tickets, y recuperación de contraseña por email.
 
-- ✅ **Modelo de Usuario** con todos los campos requeridos
-- ✅ **Encriptación de contraseñas** con bcrypt.hashSync
-- ✅ **Autenticación JWT** con Passport strategies
-- ✅ **Autorización basada en roles** (user/admin)
-- ✅ **CRUD completo de usuarios**
-- ✅ **Endpoint /current** para validar usuario logueado
+## 🏗️ Arquitectura
 
-## 📋 Requisitos
-
-- Node.js 16 o superior
-- MongoDB (local o MongoDB Atlas)
-
-## 🔧 Instalación
-
-1. **Clonar el repositorio**
-   ```bash
-   git clone <repository-url>
-   cd emerald-schrodinger
-   ```
-
-2. **Instalar dependencias**
-   ```bash
-   npm install
-   ```
-
-3. **Configurar variables de entorno**
-   
-   Copiar el archivo `.env.example` a `.env` y configurar:
-   ```bash
-   cp .env.example .env
-   ```
-
-   Editar `.env` con tus valores:
-   ```env
-   PORT=8080
-   MONGODB_URI=mongodb://localhost:27017/ecommerce
-   JWT_SECRET=tu_clave_secreta_super_segura
-   JWT_EXPIRES_IN=24h
-   ```
-
-4. **Iniciar el servidor**
-   
-   Desarrollo:
-   ```bash
-   npm run dev
-   ```
-   
-   Producción:
-   ```bash
-   npm start
-   ```
-
-## 📚 API Endpoints
-
-### Sessions (Autenticación)
-
-#### Registrar Usuario
-```http
-POST /api/sessions/register
-Content-Type: application/json
-
-{
-  "first_name": "Juan",
-  "last_name": "Pérez",
-  "email": "juan@example.com",
-  "age": 25,
-  "password": "password123",
-  "role": "user"
-}
+```
+src/
+├── config/                # Configuración (DB, Passport, Variables de entorno)
+│   ├── config.js
+│   ├── database.js
+│   └── passport.js
+├── controllers/           # Capa Controller (recibe HTTP, usa Repositories + DTOs)
+│   ├── cartController.js
+│   ├── productController.js
+│   ├── sessionController.js
+│   └── userController.js
+├── dao/                   # Capa DAO (acceso directo a Mongoose)
+│   ├── CartDAO.js
+│   ├── ProductDAO.js
+│   ├── TicketDAO.js
+│   └── UserDAO.js
+├── dto/                   # Capa DTO (filtrado de datos sensibles)
+│   ├── CartDTO.js
+│   ├── ProductDTO.js
+│   └── UserDTO.js
+├── middleware/            # Middlewares (Auth, Roles, Errores)
+│   ├── auth.js
+│   └── errorHandler.js
+├── models/                # Modelos Mongoose
+│   ├── Cart.js
+│   ├── Product.js
+│   ├── Ticket.js
+│   └── User.js
+├── repositories/          # Capa Repository (lógica de negocio)
+│   ├── CartRepository.js
+│   ├── ProductRepository.js
+│   └── UserRepository.js
+├── routes/                # Rutas Express
+│   ├── carts.js
+│   ├── index.js
+│   ├── products.js
+│   ├── sessions.js
+│   └── users.js
+├── utils/                 # Utilidades
+│   ├── jwt.js
+│   └── mailer.js
+├── app.js                 # Configuración Express
+└── server.js              # Punto de entrada
 ```
 
-**Respuesta:**
-```json
-{
-  "status": "success",
-  "message": "User registered successfully",
-  "data": {
-    "user": {
-      "id": "...",
-      "first_name": "Juan",
-      "last_name": "Pérez",
-      "email": "juan@example.com",
-      "age": 25,
-      "role": "user",
-      "cart": "..."
-    },
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-}
-```
+## 🔧 Patrones de Diseño Implementados
 
-#### Login
-```http
-POST /api/sessions/login
-Content-Type: application/json
+### DAO (Data Access Object)
+Los DAOs encapsulan el acceso a la base de datos (Mongoose), separándolo de la lógica de negocio:
+- `ProductDAO` - CRUD de productos con paginación
+- `CartDAO` - Gestión de carritos
+- `UserDAO` - Gestión de usuarios
+- `TicketDAO` - Gestión de tickets de compra
 
-{
-  "email": "juan@example.com",
-  "password": "password123"
-}
-```
+### Repository
+Los Repositories contienen la lógica de negocio y trabajan con los DAOs:
+- `ProductRepository` - Operaciones de productos
+- `CartRepository` - Carrito + **lógica de compra** (verificación de stock, generación de tickets)
+- `UserRepository` - Usuarios + creación automática de carrito al registrar
 
-**Respuesta:**
-```json
-{
-  "status": "success",
-  "message": "Login successful",
-  "data": {
-    "user": { ... },
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-}
-```
-
-#### Obtener Usuario Actual (Current)
-```http
-GET /api/sessions/current
-Authorization: Bearer <token>
-```
-
-**Respuesta:**
-```json
-{
-  "status": "success",
-  "message": "User validated successfully",
-  "data": {
-    "user": {
-      "id": "...",
-      "first_name": "Juan",
-      "last_name": "Pérez",
-      "email": "juan@example.com",
-      "age": 25,
-      "role": "user",
-      "cart": { ... }
-    }
-  }
-}
-```
-
-### Users (CRUD)
-
-#### Obtener Todos los Usuarios (Admin)
-```http
-GET /api/users
-Authorization: Bearer <admin-token>
-```
-
-#### Obtener Usuario por ID
-```http
-GET /api/users/:id
-Authorization: Bearer <token>
-```
-
-#### Actualizar Usuario
-```http
-PUT /api/users/:id
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "first_name": "Juan Carlos",
-  "age": 26
-}
-```
-
-#### Eliminar Usuario (Admin)
-```http
-DELETE /api/users/:id
-Authorization: Bearer <admin-token>
-```
+### DTO (Data Transfer Object)
+Los DTOs filtran la información antes de enviarla al cliente:
+- `UserDTO` - Excluye password y datos sensibles
+- `ProductDTO` - Formato limpio de productos
+- `CartDTO` - Formato de carrito con productos
 
 ## 🔐 Autenticación y Autorización
 
-### JWT Token
+- **JWT** con Passport (estrategias `jwt` y `current`)
+- **bcrypt** para encriptación de contraseñas
+- **Middleware de roles**:
+  - `isAdmin` - Solo administradores (CRUD de productos)
+  - `isUser` - Solo usuarios regulares (agregar al carrito, comprar)
+  - `isOwnerOrAdmin` - Dueño del recurso o admin (editar perfil)
 
-El sistema utiliza JWT (JSON Web Tokens) para autenticación. Después de login o registro, recibirás un token que debes incluir en el header `Authorization` de las peticiones protegidas:
+## 🛒 Lógica de Compra
 
-```
-Authorization: Bearer <tu-token-jwt>
-```
+`POST /api/carts/:cid/purchase`
 
-### Passport Strategies
+1. Obtiene el carrito con productos populados
+2. Verifica stock de cada producto
+3. Productos con stock: se descuenta y se suman al total
+4. Productos sin stock: permanecen en el carrito
+5. Genera un `Ticket` con código único (UUID), monto total y email del comprador
+6. Devuelve el ticket + IDs de productos no procesados
 
-1. **JWT Strategy**: Valida el token y recupera el usuario
-2. **Current Strategy**: Específica para el endpoint `/api/sessions/current`, valida el token y devuelve los datos del usuario
+## 📧 Recuperación de Contraseña
 
-### Roles
+- `POST /api/sessions/forgot-password` - Envía email con enlace de recuperación
+- `POST /api/sessions/reset-password` - Restablece la contraseña con token
+- El enlace expira en **1 hora**
+- No permite reutilizar la misma contraseña anterior
 
-- **user**: Usuario normal (por defecto)
-- **admin**: Administrador con permisos especiales
+## 🚀 Instalación
 
-### Permisos
+```bash
+# Clonar repositorio
+git clone https://github.com/Nelson-094/backendII-entrega1.git
+cd backendII-entrega1
 
-| Endpoint | user | admin |
-|----------|------|-------|
-| POST /api/sessions/register | ✅ | ✅ |
-| POST /api/sessions/login | ✅ | ✅ |
-| GET /api/sessions/current | ✅ | ✅ |
-| GET /api/users | ❌ | ✅ |
-| GET /api/users/:id | ✅ | ✅ |
-| PUT /api/users/:id | ✅ (solo propio) | ✅ |
-| DELETE /api/users/:id | ❌ | ✅ |
+# Instalar dependencias
+npm install
 
-## 🗄️ Modelos de Datos
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tus credenciales
 
-### User
-```javascript
-{
-  first_name: String,
-  last_name: String,
-  email: String (único),
-  age: Number,
-  password: String (hash con bcrypt),
-  cart: ObjectId (referencia a Cart),
-  role: String (default: 'user')
-}
+# Iniciar servidor
+npm run dev
 ```
 
-### Cart
-```javascript
-{
-  products: [{
-    product: ObjectId (referencia a Product),
-    quantity: Number
-  }]
-}
+## 🔑 Endpoints
+
+### Sessions
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| POST | `/api/sessions/register` | Público | Registrar usuario |
+| POST | `/api/sessions/login` | Público | Login + JWT |
+| GET | `/api/sessions/current` | JWT | Usuario actual (DTO) |
+| POST | `/api/sessions/forgot-password` | Público | Solicitar recuperación |
+| POST | `/api/sessions/reset-password` | Público | Restablecer contraseña |
+
+### Users
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| GET | `/api/users` | Admin | Listar usuarios |
+| GET | `/api/users/:id` | JWT | Ver usuario |
+| PUT | `/api/users/:id` | Owner/Admin | Editar usuario |
+| DELETE | `/api/users/:id` | Admin | Eliminar usuario |
+
+### Products
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| GET | `/api/products` | Público | Listar productos (paginado) |
+| GET | `/api/products/:pid` | Público | Ver producto |
+| POST | `/api/products` | Admin | Crear producto |
+| PUT | `/api/products/:pid` | Admin | Editar producto |
+| DELETE | `/api/products/:pid` | Admin | Eliminar producto |
+
+### Carts
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| GET | `/api/carts/:cid` | JWT | Ver carrito |
+| POST | `/api/carts` | JWT | Crear carrito |
+| POST | `/api/carts/:cid/product/:pid` | User | Agregar al carrito |
+| DELETE | `/api/carts/:cid/product/:pid` | JWT | Quitar del carrito |
+| PUT | `/api/carts/:cid/product/:pid` | JWT | Actualizar cantidad |
+| PUT | `/api/carts/:cid` | JWT | Actualizar carrito |
+| DELETE | `/api/carts/:cid` | JWT | Vaciar carrito |
+| POST | `/api/carts/:cid/purchase` | User | Finalizar compra |
+
+## 🧪 Ejemplo de Uso
+
+```bash
+# 1. Registrar admin
+curl -X POST http://localhost:8080/api/sessions/register \
+  -H "Content-Type: application/json" \
+  -d '{"first_name":"Admin","last_name":"Test","email":"admin@test.com","age":30,"password":"admin123","role":"admin"}'
+
+# 2. Login
+curl -X POST http://localhost:8080/api/sessions/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@test.com","password":"admin123"}'
+
+# 3. Crear producto (con token admin)
+curl -X POST http://localhost:8080/api/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -d '{"title":"Notebook","description":"Laptop 15 pulgadas","code":"NB001","price":999,"stock":10,"category":"electronics"}'
+
+# 4. Registrar usuario normal y comprar
+# (ver TESTING.md para flujo completo)
 ```
 
-### Product
-```javascript
-{
-  title: String,
-  description: String,
-  price: Number,
-  stock: Number,
-  category: String,
-  thumbnails: [String],
-  status: Boolean
-}
-```
+## 🔧 Tecnologías
 
-## 🧪 Pruebas con Postman/Thunder Client
-
-1. **Registrar un usuario**
-2. **Copiar el token** de la respuesta
-3. **Usar el token** en el header Authorization para endpoints protegidos
-4. **Probar /api/sessions/current** para validar el token
-
-## 🛡️ Seguridad
-
-- ✅ Contraseñas encriptadas con **bcrypt.hashSync** (10 salt rounds)
-- ✅ Tokens JWT con expiración configurable
-- ✅ Validación de entrada con express-validator
-- ✅ Protección de rutas con Passport JWT
-- ✅ Control de acceso basado en roles
-- ✅ Emails únicos en la base de datos
-
-## 📁 Estructura del Proyecto
-
-```
-emerald-schrodinger/
-├── src/
-│   ├── config/
-│   │   ├── database.js      # Configuración MongoDB
-│   │   └── passport.js      # Estrategias Passport (JWT y Current)
-│   ├── controllers/
-│   │   ├── sessionController.js  # Register, Login, Current
-│   │   └── userController.js     # CRUD usuarios
-│   ├── middleware/
-│   │   ├── auth.js          # Autenticación y autorización
-│   │   └── errorHandler.js  # Manejo de errores
-│   ├── models/
-│   │   ├── User.js          # Modelo Usuario (con bcrypt)
-│   │   ├── Cart.js          # Modelo Carrito
-│   │   └── Product.js       # Modelo Producto
-│   ├── routes/
-│   │   ├── sessions.js      # Rutas de autenticación
-│   │   ├── users.js         # Rutas CRUD usuarios
-│   │   └── index.js         # Router principal
-│   ├── utils/
-│   │   └── jwt.js           # Utilidades JWT
-│   ├── app.js               # Configuración Express
-│   └── server.js            # Punto de entrada
-├── .env.example             # Plantilla variables de entorno
-├── .gitignore
-├── package.json
-└── README.md
-```
-
-## 🎯 Criterios de Evaluación Cumplidos
-
-✅ **Modelo de Usuario y Encriptación**: User model con todos los campos + bcrypt.hashSync  
-✅ **Estrategias de Passport**: JWT strategy y "current" strategy implementadas  
-✅ **Sistema de Login**: Login con generación de JWT válido  
-✅ **Endpoint /current**: Valida usuario logueado y devuelve datos del JWT  
-
-## 👨‍💻 Autor
-
-Proyecto desarrollado para la entrega N°1 del curso de Backend.
-
-## 📄 Licencia
-
-ISC
+- **Node.js** + **Express.js**
+- **MongoDB** + **Mongoose** + **mongoose-paginate-v2**
+- **Passport.js** + **passport-jwt** + **jsonwebtoken**
+- **bcrypt** - Encriptación de contraseñas
+- **nodemailer** - Envío de emails
+- **uuid** - Generación de códigos de ticket
+- **dotenv** - Variables de entorno
+- **express-validator** - Validación de entrada

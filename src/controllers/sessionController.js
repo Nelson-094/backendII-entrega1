@@ -1,40 +1,44 @@
-import User from '../models/User.js';
-import Cart from '../models/Cart.js';
+import UserRepository from '../repositories/UserRepository.js';
+import UserDTO from '../dto/UserDTO.js';
 import { generateToken } from '../utils/jwt.js';
+import { sendPasswordResetEmail } from '../utils/mailer.js';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import { config } from '../config/config.js';
 import passport from 'passport';
 
+const userRepository = new UserRepository();
+
 /**
- * Register a new user
+ * Registrar nuevo usuario
  * POST /api/sessions/register
  */
 export const register = async (req, res, next) => {
     try {
         const { first_name, last_name, email, age, password, role } = req.body;
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ email });
+        // Verificar si el email ya existe
+        const existingUser = await userRepository.getByEmail(email);
         if (existingUser) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Email already registered'
+                message: 'El email ya está registrado'
             });
         }
 
-        // Create new cart for user
-        const cart = await Cart.create({ products: [] });
-
-        // Create new user (password will be hashed by pre-save hook using bcrypt.hashSync)
-        const user = await User.create({
+        // Crear usuario (el repository crea el carrito automáticamente)
+        const user = await userRepository.create({
             first_name,
             last_name,
             email,
             age,
             password,
-            cart: cart._id,
             role: role || 'user'
         });
 
-        // Generate JWT token
+        const userDTO = new UserDTO(user);
+
+        // Generar JWT token
         const token = generateToken({
             id: user._id,
             email: user.email,
@@ -43,17 +47,9 @@ export const register = async (req, res, next) => {
 
         res.status(201).json({
             status: 'success',
-            message: 'User registered successfully',
+            message: 'Usuario registrado exitosamente',
             data: {
-                user: {
-                    id: user._id,
-                    first_name: user.first_name,
-                    last_name: user.last_name,
-                    email: user.email,
-                    age: user.age,
-                    role: user.role,
-                    cart: cart._id
-                },
+                user: userDTO,
                 token
             }
         });
@@ -63,40 +59,38 @@ export const register = async (req, res, next) => {
 };
 
 /**
- * Login user and generate JWT token
+ * Login de usuario y generación de JWT
  * POST /api/sessions/login
  */
 export const login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
 
-        // Validate input
         if (!email || !password) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Email and password are required'
+                message: 'Email y contraseña son obligatorios'
             });
         }
 
-        // Find user by email
-        const user = await User.findOne({ email }).populate('cart');
+        const user = await userRepository.getByEmail(email);
         if (!user) {
             return res.status(401).json({
                 status: 'error',
-                message: 'Invalid credentials'
+                message: 'Credenciales inválidas'
             });
         }
 
-        // Compare password using bcrypt
         const isPasswordValid = user.comparePassword(password);
         if (!isPasswordValid) {
             return res.status(401).json({
                 status: 'error',
-                message: 'Invalid credentials'
+                message: 'Credenciales inválidas'
             });
         }
 
-        // Generate JWT token
+        const userDTO = new UserDTO(user);
+
         const token = generateToken({
             id: user._id,
             email: user.email,
@@ -105,17 +99,9 @@ export const login = async (req, res, next) => {
 
         res.status(200).json({
             status: 'success',
-            message: 'Login successful',
+            message: 'Login exitoso',
             data: {
-                user: {
-                    id: user._id,
-                    first_name: user.first_name,
-                    last_name: user.last_name,
-                    email: user.email,
-                    age: user.age,
-                    role: user.role,
-                    cart: user.cart
-                },
+                user: userDTO,
                 token
             }
         });
@@ -125,16 +111,15 @@ export const login = async (req, res, next) => {
 };
 
 /**
- * Get current logged user data from JWT
+ * Obtener usuario actual desde JWT (usa DTO para no enviar info sensible)
  * GET /api/sessions/current
- * Uses Passport "current" strategy to validate and extract user data
  */
 export const current = (req, res, next) => {
     passport.authenticate('current', { session: false }, (error, user, info) => {
         if (error) {
             return res.status(500).json({
                 status: 'error',
-                message: 'Error validating token',
+                message: 'Error al validar el token',
                 error: error.message
             });
         }
@@ -142,16 +127,120 @@ export const current = (req, res, next) => {
         if (!user) {
             return res.status(401).json({
                 status: 'error',
-                message: info?.message || 'Invalid or expired token'
+                message: info?.message || 'Token inválido o expirado'
             });
         }
 
+        // Devolver DTO (sin información sensible)
+        const userDTO = new UserDTO(user);
+
         res.status(200).json({
             status: 'success',
-            message: 'User validated successfully',
+            message: 'Usuario validado exitosamente',
             data: {
-                user
+                user: userDTO
             }
         });
     })(req, res, next);
+};
+
+/**
+ * Solicitar recuperación de contraseña
+ * POST /api/sessions/forgot-password
+ */
+export const forgotPassword = async (req, res, next) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'El email es obligatorio'
+            });
+        }
+
+        const user = await userRepository.getByEmail(email);
+        if (!user) {
+            // No revelar si el email existe o no (seguridad)
+            return res.json({
+                status: 'success',
+                message: 'Si el email existe, se enviará un enlace de recuperación'
+            });
+        }
+
+        // Generar token de recuperación (expira en 1 hora)
+        const resetToken = jwt.sign(
+            { id: user._id, email: user.email },
+            config.jwtSecret,
+            { expiresIn: '1h' }
+        );
+
+        const resetUrl = `${config.baseUrl}/api/sessions/reset-password?token=${resetToken}`;
+
+        // Enviar email
+        await sendPasswordResetEmail(user.email, user.first_name, resetUrl);
+
+        res.json({
+            status: 'success',
+            message: 'Si el email existe, se enviará un enlace de recuperación'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Restablecer contraseña
+ * POST /api/sessions/reset-password
+ */
+export const resetPassword = async (req, res, next) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        if (!token || !newPassword) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Token y nueva contraseña son obligatorios'
+            });
+        }
+
+        // Verificar token
+        let payload;
+        try {
+            payload = jwt.verify(token, config.jwtSecret);
+        } catch (err) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'El enlace de recuperación ha expirado o es inválido. Solicita uno nuevo.'
+            });
+        }
+
+        const user = await userRepository.getById(payload.id);
+        if (!user) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        // Verificar que no sea la misma contraseña
+        const isSamePassword = bcrypt.compareSync(newPassword, user.password);
+        if (isSamePassword) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'No puedes usar la misma contraseña anterior'
+            });
+        }
+
+        // Actualizar contraseña
+        user.password = newPassword;
+        await user.save();
+
+        res.json({
+            status: 'success',
+            message: 'Contraseña restablecida exitosamente'
+        });
+    } catch (error) {
+        next(error);
+    }
 };
